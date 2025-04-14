@@ -72,7 +72,7 @@ async function downloadImage(mediaUrl, filename) {
     });
 }
 
-async function createUVDeskTicketWithAttachment(description, subject, phone, fullName, attachmentPath, originalFileName) {
+async function createUVDeskTicketWithAttachment(description, subject, phone, fullName){//, attachmentPath, originalFileName) {
     const form = new FormData();
 
     form.append('message', description);
@@ -81,9 +81,9 @@ async function createUVDeskTicketWithAttachment(description, subject, phone, ful
     form.append('subject', subject);
     form.append('from', phone);
 
-    if (attachmentPath && fs.existsSync(attachmentPath)) {
-        form.append('attachments[]', fs.createReadStream(attachmentPath), originalFileName);
-    }
+    // if (attachmentPath && fs.existsSync(attachmentPath)) {
+    //     form.append('attachments[]', fs.createReadStream(attachmentPath), originalFileName);
+    // }
 
     try {
         const response = await axios.post(UVDESK_URL, form, {
@@ -96,18 +96,19 @@ async function createUVDeskTicketWithAttachment(description, subject, phone, ful
         console.log('Ticket created:', response.data);
         return { success: true };
     } catch (error) {
+        console.log(error);
         console.error('Error creating UVDesk ticket:', error.message);
         return { success: false, error: error.message };
-    } finally {
-        if (attachmentPath && fs.existsSync(attachmentPath)) {
-            fs.unlinkSync(attachmentPath);
-        }
-    }
+    } //finally {
+    //     if (attachmentPath && fs.existsSync(attachmentPath)) {
+    //         fs.unlinkSync(attachmentPath);
+    //     }
+    // }
 }
 
 app.post('/create-ticket', express.json(), async (req, res) => {
     const {
-        ticketAttachment,
+        //ticketAttachment,
         ticketDescription,
         ticketSubject,
         ticketUserPhone,
@@ -116,14 +117,14 @@ app.post('/create-ticket', express.json(), async (req, res) => {
         transactionType
     } = req.body;
 
-    if (!ticketAttachment || !ticketAttachment.url) {
-        return res.status(400).send({ error: 'No attachment URL provided' });
-    }
+    // if (!ticketAttachment || !ticketAttachment.url) {
+    //     return res.status(400).send({ error: 'No attachment URL provided' });
+    // }
 
     try {
-        const imageUrl = ticketAttachment.url;
-        const originalFileName = 'image.jpg';
-        const imagePath = await downloadImage(imageUrl, originalFileName);
+        // const imageUrl = ticketAttachment.url;
+        // const originalFileName = 'image.jpg';
+        // const imagePath = await downloadImage(imageUrl, originalFileName);
 
         console.log("Ticket type:", ticketType);
         console.log("Transaction type:", transactionType);
@@ -132,9 +133,9 @@ app.post('/create-ticket', express.json(), async (req, res) => {
             ticketDescription,
             ticketSubject,
             ticketUserPhone,
-            ticketUserFullName,
-            imagePath,
-            originalFileName
+            ticketUserFullName
+            //imagePath,
+            //originalFileName
         );
 
         if (result.success) {
