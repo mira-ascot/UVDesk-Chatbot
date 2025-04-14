@@ -96,6 +96,7 @@ async function createUVDeskTicketWithAttachment(description, subject, phone, ful
         console.log('Ticket created:', response.data);
         return { success: true };
     } catch (error) {
+        console.log(error);
         console.error('Error creating UVDesk ticket:', error.message);
         return { success: false, error: error.message };
     } //finally {
