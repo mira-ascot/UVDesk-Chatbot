@@ -107,7 +107,7 @@ async function createUVDeskTicketWithAttachment(description, subject, phone, ful
 
 app.post('/create-ticket', express.json(), async (req, res) => {
     const {
-        ticketAttachment,
+        //ticketAttachment,
         ticketDescription,
         ticketSubject,
         ticketUserPhone,
@@ -116,14 +116,14 @@ app.post('/create-ticket', express.json(), async (req, res) => {
         transactionType
     } = req.body;
 
-    if (!ticketAttachment || !ticketAttachment.url) {
-        return res.status(400).send({ error: 'No attachment URL provided' });
-    }
+    // if (!ticketAttachment || !ticketAttachment.url) {
+    //     return res.status(400).send({ error: 'No attachment URL provided' });
+    // }
 
     try {
-        const imageUrl = ticketAttachment.url;
-        const originalFileName = 'image.jpg';
-        const imagePath = await downloadImage(imageUrl, originalFileName);
+        // const imageUrl = ticketAttachment.url;
+        // const originalFileName = 'image.jpg';
+        // const imagePath = await downloadImage(imageUrl, originalFileName);
 
         console.log("Ticket type:", ticketType);
         console.log("Transaction type:", transactionType);
