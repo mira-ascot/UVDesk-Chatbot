@@ -72,7 +72,7 @@ async function downloadImage(mediaUrl, filename) {
     });
 }
 
-async function createUVDeskTicketWithAttachment(description, subject, phone, fullName, attachmentPath, originalFileName) {
+async function createUVDeskTicketWithAttachment(description, subject, phone, fullName){//, attachmentPath, originalFileName) {
     const form = new FormData();
 
     form.append('message', description);
@@ -81,9 +81,9 @@ async function createUVDeskTicketWithAttachment(description, subject, phone, ful
     form.append('subject', subject);
     form.append('from', phone);
 
-    if (attachmentPath && fs.existsSync(attachmentPath)) {
-        form.append('attachments[]', fs.createReadStream(attachmentPath), originalFileName);
-    }
+    // if (attachmentPath && fs.existsSync(attachmentPath)) {
+    //     form.append('attachments[]', fs.createReadStream(attachmentPath), originalFileName);
+    // }
 
     try {
         const response = await axios.post(UVDESK_URL, form, {
@@ -98,11 +98,11 @@ async function createUVDeskTicketWithAttachment(description, subject, phone, ful
     } catch (error) {
         console.error('Error creating UVDesk ticket:', error.message);
         return { success: false, error: error.message };
-    } finally {
-        if (attachmentPath && fs.existsSync(attachmentPath)) {
-            fs.unlinkSync(attachmentPath);
-        }
-    }
+    } //finally {
+    //     if (attachmentPath && fs.existsSync(attachmentPath)) {
+    //         fs.unlinkSync(attachmentPath);
+    //     }
+    // }
 }
 
 app.post('/create-ticket', express.json(), async (req, res) => {
@@ -132,9 +132,9 @@ app.post('/create-ticket', express.json(), async (req, res) => {
             ticketDescription,
             ticketSubject,
             ticketUserPhone,
-            ticketUserFullName,
-            imagePath,
-            originalFileName
+            ticketUserFullName
+            //imagePath,
+            //originalFileName
         );
 
         if (result.success) {
