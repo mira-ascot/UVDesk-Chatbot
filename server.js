@@ -7,6 +7,7 @@ const fs = require('fs');
 const path = require('path');
 const he = require('he');
 const followHttps = require('follow-redirects').https;
+const ldap = require('ldapjs');
 
 const app = express();
 const port = process.env.PORT || 3000;
@@ -177,6 +178,33 @@ app.post('/reply', express.json(), async (req, res) => {
         console.error('Error sending Infobip message:', err.response?.data || err.message);
         res.status(500).send({ success: false, error: err.message });
     }
+});
+
+app.get('/auth',express.json(),async(req,res)=>{
+    const {username,password}  = req.body;
+    const ldap = require('ldapjs');
+
+    const client = ldap.createClient({
+    url: 'ldap://37.34.243.17', 
+    timeout: 5000,
+    connectTimeout: 10000
+    });
+
+    const bindDN = `CN=${username},CN=Users,DC=actd,DC=ascotes,DC=com`;
+
+    client.bind(bindDN, password, (err) => {
+    if (err) {
+        console.log("error");
+        res.status(400).send({ success: false });
+    } else {
+        console.log("auth successful");
+        res.status(200).send({ success: true });
+    }
+
+    client.unbind();
+});
+
+
 });
 
 app.listen(port, () => {
