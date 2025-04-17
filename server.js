@@ -182,7 +182,6 @@ app.post('/reply', express.json(), async (req, res) => {
 
 app.get('/auth',express.json(),async(req,res)=>{
     const {username,password}  = req.body;
-    const ldap = require('ldapjs');
 
     const client = ldap.createClient({
     url: 'ldap://37.34.243.17', 
