@@ -149,6 +149,40 @@ app.post('/create-ticket', express.json(), async (req, res) => {
     }
 });
 
+app.post('/create-ticket-no-attachment', express.json(), async (req, res) => {
+    const {
+        ticketDescription,
+        ticketSubject,
+        ticketUserPhone,
+        ticketUserFullName,
+        ticketType,
+        transactionType
+    } = req.body;
+
+    try {
+        console.log("Ticket type:", ticketType);
+        console.log("Transaction type:", transactionType);
+
+        const result = await createUVDeskTicketWithAttachment(
+            ticketDescription,
+            ticketSubject,
+            ticketUserPhone,
+            ticketUserFullName,
+            null,
+            null 
+        );
+
+        if (result.success) {
+            res.status(200).send({ success: true });
+        } else {
+            res.status(500).send({ success: false, error: result.error });
+        }
+    } catch (error) {
+        console.error('Error creating ticket:', error.message);
+        res.status(500).send({ success: false, error: 'Error creating ticket' });
+    }
+});
+
 app.post('/reply', express.json(), async (req, res) => {
     const { ticket_id, message, agent_email, from } = req.body;
 
