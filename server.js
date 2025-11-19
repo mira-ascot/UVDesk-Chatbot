@@ -7,7 +7,6 @@ const fs = require('fs');
 const path = require('path');
 const he = require('he');
 const followHttps = require('follow-redirects').https;
-const ldap = require('ldapjs');
 
 const app = express();
 const port = process.env.PORT || 3000;
@@ -23,12 +22,18 @@ if (!fs.existsSync(uploadsDir)) {
     fs.mkdirSync(uploadsDir);
 }
 
+// Global JSON parser
+app.use(express.json());
+
 async function downloadImage(mediaUrl, filename) {
     const filePath = path.join(uploadsDir, filename);
 
     const urlParts = mediaUrl.split('/');
-    const senderId = urlParts[urlParts.indexOf('senders') + 1];
-    const mediaId = urlParts[urlParts.indexOf('media') + 1];
+    const senderIndex = urlParts.indexOf('senders');
+    const mediaIndex = urlParts.indexOf('media');
+
+    const senderId = senderIndex !== -1 ? urlParts[senderIndex + 1] : null;
+    const mediaId = mediaIndex !== -1 ? urlParts[mediaIndex + 1] : null;
 
     if (!senderId || !mediaId) {
         throw new Error('Could not extract senderId or mediaId from the URL.');
@@ -73,7 +78,14 @@ async function downloadImage(mediaUrl, filename) {
     });
 }
 
-async function createUVDeskTicketWithAttachment(description, subject, phone, fullName, attachmentPath, originalFileName) {
+async function createUVDeskTicketWithAttachment(
+    description,
+    subject,
+    phone,
+    fullName,
+    attachmentPath,
+    originalFileName
+) {
     const form = new FormData();
 
     form.append('message', description);
@@ -95,7 +107,24 @@ async function createUVDeskTicketWithAttachment(description, subject, phone, ful
         });
 
         console.log('Ticket created:', response.data);
-        return { success: true };
+
+        // Extract ticketId safely from UVDesk response
+        let ticketId = null;
+        const data = response.data;
+
+        if (data && data.ticket && data.ticket.id) {
+            ticketId = data.ticket.id;
+        } else if (data && data.id) {
+            ticketId = data.id;
+        }
+
+        // If we don't have a ticketId, treat it as failure
+        if (!ticketId) {
+            console.error('Ticket ID missing from UVDesk response');
+            return { success: false, error: 'Ticket ID missing from UVDesk response' };
+        }
+
+        return { success: true, ticketId };
     } catch (error) {
         console.error('Error creating UVDesk ticket:', error.message);
         return { success: false, error: error.message };
@@ -106,28 +135,34 @@ async function createUVDeskTicketWithAttachment(description, subject, phone, ful
     }
 }
 
-app.post('/create-ticket', express.json(), async (req, res) => {
+app.post('/create-ticket', async (req, res) => {
     const {
         ticketAttachment,
         ticketDescription,
         ticketSubject,
         ticketUserPhone,
-        ticketUserFullName,
-        ticketType,
-        transactionType
+        ticketUserFullName
     } = req.body;
 
-    if (!ticketAttachment || !ticketAttachment.url) {
-        return res.status(400).send({ error: 'No attachment URL provided' });
+    let attachmentUrl = null;
+
+    // Case 1 → { url: "…" }
+    if (ticketAttachment && typeof ticketAttachment === 'object' && ticketAttachment.url) {
+        attachmentUrl = ticketAttachment.url;
+
+    // Case 2 → direct string URL
+    } else if (typeof ticketAttachment === 'string' && ticketAttachment.startsWith('http')) {
+        attachmentUrl = ticketAttachment;
+    }
+
+    if (!attachmentUrl) {
+        console.error('No valid attachment URL provided');
+        return res.status(400).send({ success: false });
     }
 
     try {
-        const imageUrl = ticketAttachment.url;
         const originalFileName = 'image.jpg';
-        const imagePath = await downloadImage(imageUrl, originalFileName);
-
-        console.log("Ticket type:", ticketType);
-        console.log("Transaction type:", transactionType);
+        const imagePath = await downloadImage(attachmentUrl, originalFileName);
 
         const result = await createUVDeskTicketWithAttachment(
             ticketDescription,
@@ -138,56 +173,51 @@ app.post('/create-ticket', express.json(), async (req, res) => {
             originalFileName
         );
 
-        if (result.success) {
-            res.send({ success: true });
-        } else {
-            res.status(500).send({ success: false, error: result.error });
+        if (!result.success) {
+            return res.status(500).send({ success: false });
         }
+
+        return res.send({ success: true, ticketId: result.ticketId });
     } catch (error) {
-        console.error('Error downloading image:', error.message);
-        res.status(500).send({ success: false, error: 'Error downloading image' });
+        console.error('Error in /create-ticket:', error.message);
+        return res.status(500).send({ success: false });
     }
 });
 
-app.post('/create-ticket-no-attachment', express.json(), async (req, res) => {
+app.post('/create-ticket-no-attachment', async (req, res) => {
     const {
         ticketDescription,
         ticketSubject,
         ticketUserPhone,
-        ticketUserFullName,
-        ticketType,
-        transactionType
+        ticketUserFullName
     } = req.body;
 
     try {
-        console.log("Ticket type:", ticketType);
-        console.log("Transaction type:", transactionType);
-
         const result = await createUVDeskTicketWithAttachment(
             ticketDescription,
             ticketSubject,
             ticketUserPhone,
             ticketUserFullName,
             null,
-            null 
+            null
         );
 
-        if (result.success) {
-            res.status(200).send({ success: true });
-        } else {
-            res.status(500).send({ success: false, error: result.error });
+        if (!result.success) {
+            return res.status(500).send({ success: false });
         }
+
+        return res.status(200).send({ success: true, ticketId: result.ticketId });
     } catch (error) {
-        console.error('Error creating ticket:', error.message);
-        res.status(500).send({ success: false, error: 'Error creating ticket' });
+        console.error('Error in /create-ticket-no-attachment:', error.message);
+        return res.status(500).send({ success: false });
     }
 });
 
-app.post('/reply', express.json(), async (req, res) => {
+app.post('/reply', async (req, res) => {
     const { ticket_id, message, agent_email, from } = req.body;
 
     const customerPhone = from;
-    let plainMessage = he.decode(message).replace(/<\/?[^>]+(>|$)/g, "");
+    let plainMessage = he.decode(message).replace(/<\/?[^>]+(>|$)/g, '');
 
     const payload = {
         from: WHATSAPP_SENDER,
@@ -202,42 +232,16 @@ app.post('/reply', express.json(), async (req, res) => {
             headers: {
                 Authorization: `App ${INFOBIP_API_KEY}`,
                 'Content-Type': 'application/json',
-                'Accept': 'application/json'
+                Accept: 'application/json'
             }
         });
 
         console.log('Message sent via Infobip:', response.data);
-        res.send({ success: true });
+        return res.send({ success: true });
     } catch (err) {
         console.error('Error sending Infobip message:', err.response?.data || err.message);
-        res.status(500).send({ success: false, error: err.message });
+        return res.status(500).send({ success: false });
     }
-});
-
-app.get('/auth',express.json(),async(req,res)=>{
-    const {username,password}  = req.body;
-
-    const client = ldap.createClient({
-    url: 'ldap://37.34.243.17', 
-    timeout: 5000,
-    connectTimeout: 10000
-    });
-
-    const bindDN = `CN=${username},CN=Users,DC=actd,DC=ascotes,DC=com`;
-
-    client.bind(bindDN, password, (err) => {
-    if (err) {
-        console.log("error");
-        res.status(400).send({ success: false });
-    } else {
-        console.log("auth successful");
-        res.status(200).send({ success: true });
-    }
-
-    client.unbind();
-});
-
-
 });
 
 app.listen(port, () => {
